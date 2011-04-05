@@ -3,7 +3,7 @@
 #
 
 ifeq ($(strip $(OETMP)),)
-	OETMP = /oe6
+	OETMP = $(HOME)/overo-oe/tmp 
 endif
 
 
@@ -24,7 +24,7 @@ v4lexplore: v4lexplore.c
 	$(CC) $(CFLAGS) -I $(INCDIR) -L $(LIBDIR) v4lexplore.c -o v4lexplore
 
 install:
-	scp v4lexplore root@192.168.4.50:/home/root
+	sudo cp v4lexplore /exports/overo/home/root
 
 clean:
 	rm -f v4lexplore
