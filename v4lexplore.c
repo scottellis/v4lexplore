@@ -8,57 +8,117 @@
 #include <linux/videodev2.h>
 
 
-struct vidioc_querycap_ids {
+struct defs_to_strings {
 	unsigned long id;
 	char idstr[32];
 };
 
-static struct vidioc_querycap_ids vqc_ids[] = {
+static struct defs_to_strings querycap_ids[] = {
 	{ V4L2_CAP_VIDEO_CAPTURE, "V4L2_CAP_VIDEO_CAPTURE" },
 	{ V4L2_CAP_VIDEO_OUTPUT, "V4L2_CAP_VIDEO_OUTPUT" },
 	{ V4L2_CAP_VIDEO_OVERLAY, "V4L2_CAP_VIDEO_OVERLAY" },
-	{ V4L2_CAP_VBI_CAPTURE, "V4L2_CAP_VBI_CAPTURE" },
-	{ V4L2_CAP_VBI_OUTPUT, "V4L2_CAP_VBI_OUTPUT" },
+	{ V4L2_CAP_VBI_CAPTURE, "V4L2_CAP_VBI_CAPTURE" }, { V4L2_CAP_VBI_OUTPUT, "V4L2_CAP_VBI_OUTPUT" },
 	{ V4L2_CAP_SLICED_VBI_CAPTURE, "V4L2_CAP_SLICED_VBI_CAPTURE" },
 	{ V4L2_CAP_SLICED_VBI_OUTPUT, "V4L2_CAP_SLICED_VBI_OUTPUT" },
 	{ V4L2_CAP_RDS_CAPTURE, "V4L2_CAP_RDS_CAPTURE" },
 	{ V4L2_CAP_VIDEO_OUTPUT_OVERLAY, "V4L2_CAP_VIDEO_OUTPUT_OVERLAY" },
 	{ V4L2_CAP_HW_FREQ_SEEK, "V4L2_CAP_HW_FREQ_SEEK" },
-/*	{ V4L2_CAP_RDS_OUTPUT, "V4L2_CAP_RDS_OUTPUT" }, */
 	{ V4L2_CAP_TUNER, "V4L2_CAP_TUNER" },
 	{ V4L2_CAP_AUDIO, "V4L2_CAP_AUDIO" },
 	{ V4L2_CAP_RADIO, "V4L2_CAP_RADIO" },
-/*	{ V4L2_CAP_MODULATOR, "V4L2_CAP_MODULATOR" }, */
 	{ V4L2_CAP_READWRITE, "V4L2_CAP_READWRITE" },
 	{ V4L2_CAP_ASYNCIO, "V4L2_CAP_ASYNCIO" },
-	{ V4L2_CAP_STREAMING, "V4L2_CAP_STREAMING" }
+	{ V4L2_CAP_STREAMING, "V4L2_CAP_STREAMING" },
+	{ 0, "" }
+};
+
+static struct defs_to_strings pixel_fmt_ids[] = {
+	{ V4L2_PIX_FMT_BGR24, "V4L2_PIX_FMT_BGR24" },
+	{ V4L2_PIX_FMT_RGB24, "V4L2_PIX_FMT_RGB24" },
+	{ V4L2_PIX_FMT_BGR32, "V4L2_PIX_FMT_BGR32" },
+	{ V4L2_PIX_FMT_RGB32, "V4L2_PIX_FMT_RGB32" },
+	{ V4L2_PIX_FMT_GREY, "V4L2_PIX_FMT_GREY" },
+	{ V4L2_PIX_FMT_YUYV, "V4L2_PIX_FMT_YUYV" },
+	{ V4L2_PIX_FMT_YVYU, "V4L2_PIX_FMT_YVYU" },
+	{ V4L2_PIX_FMT_UYVY, "V4L2_PIX_FMT_UYVY" },
+	{ V4L2_PIX_FMT_VYUY, "V4L2_PIX_FMT_VYUY" },
+	{ V4L2_PIX_FMT_MJPEG, "V4L2_PIX_FMT_MJPEG" },
+	{ V4L2_PIX_FMT_JPEG, "V4L2_PIX_FMT_JPEG" },
+	{ 0, "" }
 };
 
 
-int vidioc_query_cap(int fh);
+
+int vidioc_querycap(int fh);
 int vidioc_enum_input(int fh);
 int vidioc_enum_output(int fh);
 int vidioc_enum_fmt(int fh);
-int vidioc_query_ctrl(int fh);
+int vidioc_queryctrl(int fh);
 
 void fourcc_to_char(unsigned int cc, char *str);
 
+void usage(char *argv_0)
+{
+	printf("Usage: %s [-d <device>] [properties]\n", argv_0);
+ 	printf("  -d <device>: defaults to /dev/video0\n");
+	printf("  The options are numbers which query different v4l2\n");
+	printf("  properties for the device as described below.\n");
+	printf("  The default behavior is to query all properties.\n");
+	printf("  Options:\n");
+	printf("  -1: vidioc_querycap\n");
+	printf("  -2: vidioc_enum_fmt\n");
+	printf("  -3: vidioc_enum_framesizes\n");
+	printf("  -4: vidioc_queryctrl\n"); 
+	printf("\n");	
+
+	exit(1);
+}
+
 int main(int argc, char **argv)
 {
-	int fh;
+	int fh, opt;
+	int prop[4];
+	char device[32];
 
-	if ((fh = open("/dev/video0", O_RDWR)) < 0) {
+	memset(device, 0, sizeof(device));
+	memset(prop, 0, sizeof(prop));
+
+	while ((opt = getopt(argc, argv, "-d:1234h")) != -1) {
+		switch (opt) {
+		case 'd':
+			strncpy(device, optarg, sizeof(device) - 1);
+			break;
+	
+		case '1':
+		case '2':
+		case '3':
+		case '4':
+			prop[opt - '1'] = 1;
+			break;
+
+		case 'h':
+		default:
+			usage(argv[0]);
+			break;
+		}
+	}
+
+	if (strlen(device) == 0)
+		strcpy(device, "/dev/video0");
+
+	if ((fh = open(device, O_RDWR)) < 0) {
 		perror("open");
 		return 1;
 	}
 
-	vidioc_query_cap(fh);
-	vidioc_enum_input(fh);
-	/* vidioc_enum_output(fh); */
+	if (prop[0])
+		vidioc_querycap(fh);
 
-	vidioc_enum_fmt(fh);
+	if (prop[1])
+		vidioc_enum_fmt(fh);
 
-	vidioc_query_ctrl(fh);
+	if (prop[3])
+		vidioc_queryctrl(fh);
 
 	printf("\n");
 
@@ -67,7 +127,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-int vidioc_query_ctrl(int fh)
+int vidioc_queryctrl(int fh)
 {
 	int i;
 	struct v4l2_queryctrl qc;
@@ -151,6 +211,13 @@ int vidioc_enum_fmt(int fh)
 
 		fourcc_to_char(f.pixelformat, buff);
 		printf("\tpixelformat: 0x%08X (%s)\n", f.pixelformat, buff);		
+
+		for (i = 0; pixel_fmt_ids[i].id != 0; i++) {
+			if (pixel_fmt_ids[i].id == f.pixelformat) {
+				printf("\tdefinition: %s\n", pixel_fmt_ids[i].idstr);
+				break;
+			}
+		}
 	}
 	
 	return 0;
@@ -168,9 +235,9 @@ void fourcc_to_char(unsigned int cc, char *str)
 	str[4] = 0;
 }
 
-int vidioc_query_cap(int fh)
+int vidioc_querycap(int fh)
 {
-	int i, len;
+	int i;
 	struct v4l2_capability cap;
 
 	bzero(&cap, sizeof(cap));
@@ -193,13 +260,11 @@ int vidioc_query_cap(int fh)
 
 	printf("version: %u\n", cap.version);
 
-	len = sizeof(vqc_ids) / sizeof(vqc_ids[0]);
-
 	printf("capabilites:\n");
 
-	for (i = 0; i < len; i++) {
-		if (cap.capabilities & vqc_ids[i].id)
-			printf("\t%s\n", vqc_ids[i].idstr);
+	for (i = 0; querycap_ids[i].id != 0; i++) {
+		if (cap.capabilities & querycap_ids[i].id)
+			printf("\t%s\n", querycap_ids[i].idstr);
 	}
 
 	return 0;
@@ -292,5 +357,4 @@ int vidioc_enum_output(int fh)
 
 	return 0; 
 }
-
 
