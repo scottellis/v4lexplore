@@ -54,6 +54,7 @@ int vidioc_enum_input(int fh);
 int vidioc_enum_output(int fh);
 int vidioc_enum_fmt(int fh);
 int vidioc_queryctrl(int fh);
+int vidioc_enum_frameintervals(int fh, int pixel_format, int width, int height);
 
 void fourcc_to_char(unsigned int cc, char *str);
 
@@ -67,8 +68,9 @@ void usage(char *argv_0)
 	printf("  Options:\n");
 	printf("  -1: vidioc_querycap\n");
 	printf("  -2: vidioc_enum_fmt\n");
-	printf("  -3: vidioc_enum_framesizes\n");
-	printf("  -4: vidioc_queryctrl\n"); 
+//	printf("  -3: vidioc_enum_framesizes\n");
+	printf("  -3: vidioc_queryctrl\n");
+	printf("  -4: vidioc_enum_frameintervals\n"); 
 	printf("\n");	
 
 	exit(1);
@@ -77,16 +79,18 @@ void usage(char *argv_0)
 int main(int argc, char **argv)
 {
 	int fh, opt;
+	int dev;
 	int prop[4];
 	char device[32];
 
+	dev = 0;
 	memset(device, 0, sizeof(device));
 	memset(prop, 0, sizeof(prop));
 
 	while ((opt = getopt(argc, argv, "-d:1234h")) != -1) {
 		switch (opt) {
 		case 'd':
-			strncpy(device, optarg, sizeof(device) - 1);
+			dev = atoi(optarg);
 			break;
 	
 		case '1':
@@ -103,8 +107,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (strlen(device) == 0)
-		strcpy(device, "/dev/video0");
+	sprintf(device, "/dev/video%d", dev);
 
 	if ((fh = open(device, O_RDWR)) < 0) {
 		perror("open");
@@ -117,8 +120,11 @@ int main(int argc, char **argv)
 	if (prop[1])
 		vidioc_enum_fmt(fh);
 
-	if (prop[3])
+	if (prop[2])
 		vidioc_queryctrl(fh);
+
+	if (prop[3])
+		vidioc_enum_frameintervals(fh, V4L2_PIX_FMT_MJPEG, 640, 480);
 
 	printf("\n");
 
@@ -155,22 +161,17 @@ int vidioc_queryctrl(int fh)
 
 		switch (qc.type) {
 		case V4L2_CTRL_TYPE_INTEGER:
-			printf("\ttype: integer\n");
-			printf("\tminimum: %d\n", qc.minimum);
-			printf("\tmaximum: %d\n", qc.maximum);
-			printf("\tstep: %d\n", qc.step);
-			printf("\tdefault: %d\n", qc.default_value);
+			printf("\ttype: integer\tmin: %d\tmax: %d\tstep: %d\tdefault: %d\n", 
+				qc.minimum, qc.maximum, qc.step, qc.default_value);
 			break;
+
 		case V4L2_CTRL_TYPE_BOOLEAN:
-			printf("\ttype: boolean\n");
-			printf("\tdefault: %d\n", qc.default_value);
-			break;			
+			printf("\ttype: boolean\tdefault: %d\n", qc.default_value);
+			break;
+			
 		default:
-			printf("\ttype: other: %d\n", (int) qc.type);
-			printf("\tminimum: %d\n", qc.minimum);
-			printf("\tmaximum: %d\n", qc.maximum);
-			printf("\tstep: %d\n", qc.step);
-			printf("\tdefault: %d\n", qc.default_value);
+			printf("\ttype: other: %d\tmin: %d\tmax: %d\tstep: %d\tdefault: %d\n", 
+				(int)qc.type, qc.minimum, qc.maximum, qc.step, qc.default_value);
 		}
 
 		if (qc.flags)
@@ -185,7 +186,7 @@ int vidioc_queryctrl(int fh)
 
 int vidioc_enum_fmt(int fh)
 {
-	int i;
+	int i, j;
 	struct v4l2_fmtdesc f;
 	char buff[8];
 
@@ -212,15 +213,69 @@ int vidioc_enum_fmt(int fh)
 		fourcc_to_char(f.pixelformat, buff);
 		printf("\tpixelformat: 0x%08X (%s)\n", f.pixelformat, buff);		
 
-		for (i = 0; pixel_fmt_ids[i].id != 0; i++) {
-			if (pixel_fmt_ids[i].id == f.pixelformat) {
-				printf("\tdefinition: %s\n", pixel_fmt_ids[i].idstr);
+		for (j = 0; pixel_fmt_ids[j].id != 0; j++) {
+			if (pixel_fmt_ids[j].id == f.pixelformat) {
+				printf("\tdefinition: %s\n", pixel_fmt_ids[j].idstr);
 				break;
 			}
 		}
 	}
 	
 	return 0;
+}
+
+int vidioc_enum_frameintervals(int fh, int pixel_format, int width, int height)
+{
+	struct v4l2_frmivalenum f;
+	char display_str[32];
+	int i;
+
+	// get a printable string for the pixel format
+	memset(display_str, 0, sizeof(display_str));
+
+	for (i = 0; pixel_fmt_ids[i].id != 0; i++) {
+		if (pixel_fmt_ids[i].id == pixel_format) {
+			strcpy(display_str, pixel_fmt_ids[i].idstr);
+			break;
+		}
+	}
+
+	memset(&f, 0, sizeof(f));
+
+    f.index = 0;
+    f.pixel_format = pixel_format;
+    f.width = width;
+	f.height = height;
+    
+	printf("\n=== VIDIOC_ENUM_FRAMEINTERVALS ===\n\n");
+
+    if (ioctl(fh, VIDIOC_ENUM_FRAMEINTERVALS, &f) < 0) {
+		perror("VIDIOC_ENUM_FRAMEINTERVALS");
+		return 0;
+	}
+
+	
+	while (1) {
+		printf("Frame Interval\n");
+		printf("\tIndex: %u\n", f.index);
+		printf("\tPixelFormat: %s\n", display_str);
+		printf("\tWidth: %u\n", f.width);
+		printf("\tHeight: %u\n", f.height);
+		printf("\tType: %u\n", f.type);
+
+		if (f.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+			printf("\t\tNumerator: %u\n", f.discrete.numerator);
+			printf("\t\tDenominator: %u\n", f.discrete.denominator);
+		}
+
+		printf("\n");
+
+		f.index++;
+	    if (ioctl(fh, VIDIOC_ENUM_FRAMEINTERVALS, &f) < 0)
+			break;
+	}
+
+    return f.index;
 }
 
 void fourcc_to_char(unsigned int cc, char *str)
